@@ -11,10 +11,10 @@ from utils.utils import get_model
 from diffusion.sampling import *
 
 parser = ArgumentParser()
-parser.add_argument('--model_dir', type=str, required=True, help='Path to folder with trained model and hyperparameters')
+parser.add_argument('--model_dir', type=str, default='./test_run', help='Path to folder with trained model and hyperparameters')
 parser.add_argument('--ckpt', type=str, default='best_model.pt', help='Checkpoint to use inside the folder')
-parser.add_argument('--out', type=str, help='Path to the output pickle file')
-parser.add_argument('--test_csv', type=str, default='./data/DRUGS/test_smiles.csv', help='Path to csv file with list of smiles and number conformers')
+parser.add_argument('--out', type=str, default='test_run/test_data.pkl', help='Path to the output pickle file')
+parser.add_argument('--test_csv', type=str, default='./data/QM9/test_smiles.csv', help='Path to csv file with list of smiles and number conformers')
 parser.add_argument('--pre_mmff', action='store_true', default=False, help='Whether to run MMFF on the local structure conformer')
 parser.add_argument('--post_mmff', action='store_true', default=False, help='Whether to run MMFF on the final generated structures')
 parser.add_argument('--no_random', action='store_true', default=False, help='Whether avoid randomising the torsions of the seed conformer')
@@ -54,6 +54,7 @@ still_frames = 10
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 batch_size = args.batch_size
 
+##################### Do not use this 
 if args.seed_confs:
     print("Using local structures from", args.seed_confs)
     with open(args.seed_confs, 'rb') as f:
@@ -62,7 +63,9 @@ elif args.seed_mols:
     print("Using molecules from", args.seed_mols)
     with open(args.seed_mols, 'rb') as f:
         seed_confs = pickle.load(f)
+#####################
 
+##################### Load model
 with open(f'{args.model_dir}/model_parameters.yml') as f:
     args.__dict__.update(yaml.full_load(f))
 args.batch_size = batch_size  # override the training one
@@ -72,6 +75,7 @@ if not args.no_model:
     model.load_state_dict(state_dict, strict=True)
     model = model.to(device)
     model.eval()
+#####################
 
 test_data = pd.read_csv(args.test_csv).values
 if args.limit_mols:
@@ -86,6 +90,14 @@ else:
 
 def sample_confs(raw_smi, n_confs, smi):
     print(raw_smi)
+    '''
+    1) get_seed: Convert smile to graph
+    2) embed_seeds: Separate conformers (1 mol, 1 conformer)
+    3) perturb_seeds: Sample uniform torsion angle
+    4) sample:
+    5) pyg_to_mol:
+    6) populate_likelihood: 
+    '''
     if args.seed_confs:
         mol, data = get_seed(raw_smi, seed_confs=seed_confs, dataset=args.dataset)
     elif args.seed_mols:
@@ -98,7 +110,7 @@ def sample_confs(raw_smi, n_confs, smi):
         return None
 
     n_rotable_bonds = int(data.edge_mask.sum())
-    if args.seed_confs:
+    if args.seed_confs: # None
         conformers, pdb = embed_seeds(mol, data, n_confs, single_conf=args.single_conf, smi=raw_smi,
                                       pdb=args.dump_pymol, seed_confs=seed_confs)
     else:
@@ -110,7 +122,10 @@ def sample_confs(raw_smi, n_confs, smi):
 
     if not args.no_random and n_rotable_bonds > 0.5:
         conformers = perturb_seeds(conformers, pdb)
-
+    '''
+    conformers: [58] # List([Data])
+    Data(x=[19, 44], edge_index=[2, 36], edge_attr=[36, 4], z=[19], name='C#CC#C[C@@H](CC)CO', edge_mask=[36], mask_rotate=[8, 19], pos=[19, 3], seed_mol=<rdkit.Chem.rdchem.Mol object at 0x00000259E70E7220>, total_perturb=[8])
+    '''
     if not args.no_model and n_rotable_bonds > 0.5:
         conformers = sample(conformers, model, args.sigma_max, args.sigma_min, args.inference_steps,
                             args.batch_size, args.ode, args.likelihood, pdb)
@@ -120,7 +135,7 @@ def sample_confs(raw_smi, n_confs, smi):
             os.mkdir(args.dump_pymol)
         pdb.write(f'{args.dump_pymol}/{smi_idx}.pdb', limit_parts=5)
 
-    mols = [pyg_to_mol(mol, conf, args.post_mmff, rmsd=not args.no_energy) for conf in conformers]
+    mols = [pyg_to_mol(mol, conf, args.post_mmff, rmsd=not args.no_energy) for conf in conformers] # Convert pyg object to Mol object
     if args.likelihood:
         if n_rotable_bonds < 0.5:
             print(f"Skipping mol {smi} with 0 rotable bonds")
@@ -132,7 +147,7 @@ def sample_confs(raw_smi, n_confs, smi):
         mols = [mol for mol in mols if mol.xtb_energy]
     return mols
 
-
+#######################################
 for smi_idx, (raw_smi, n_confs, smi) in test_data:
     if type(args.confs_per_mol) is int:
         mols = sample_confs(raw_smi, args.confs_per_mol, smi)

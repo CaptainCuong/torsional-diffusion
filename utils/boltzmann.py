@@ -12,7 +12,7 @@ class BoltzmannResampler:
             times_seen = data.times_seen
         except:
             self.resample(data)
-        if data.times_seen > max(5, int(data.ess)):
+        if data.times_seen > max(5, int(data.ess)): # resampling every max(5; ESS) epochs (Page 24)
             self.resample(data)
         elif data.times_seen == max(5, int(data.ess)):
             if np.random.rand() < 0.5:
@@ -21,16 +21,20 @@ class BoltzmannResampler:
 
     def resample(self, data, temperature=None):
         T = temperature if temperature else self.temp
-        kT = 1.38e-23 * 6.022e23 * T / 4148
+        kT = 1.38e-23 * 6.022e23 * T / 4148 
+        # k = 1.380649 × 10-23 (Boltzmann constant)
+        # NA = 6.022e23 (Avogadro constant)
         model, args = self.model, self.args
         model.eval()
-        data.pos = data.pos[0]
+        data.pos = data.pos[0] 
+        # len(data.pos) != 1
+        # data.pos[0].shape = [n, 3] (n: number of nodes)
 
         samples = []
         for i in range(args.boltzmann_confs):
             data_new = copy.deepcopy(data)
             samples.append(data_new)
-        samples = perturb_seeds(samples)
+        samples = perturb_seeds(samples) # Sample uniform torsion angle
         samples = sample(samples, model, steps=args.boltzmann_steps, ode=True,
                          sigma_max=args.sigma_max, sigma_min=args.sigma_min, likelihood=args.likelihood)
 
@@ -53,7 +57,7 @@ class BoltzmannResampler:
         return data.ess
 
 
-class BaselineResampler:
+class BaselineResampler: # used in $test_boltzmann.py
     def __init__(self, ais_steps, temp, mcmc_sigma, n_samples):
         self.ais_steps = ais_steps
         self.temp = temp

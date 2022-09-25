@@ -102,7 +102,14 @@ def featurize_mol(mol, types=drugs_types):
 
 
 def featurize_mol_from_smiles(smiles, dataset='drugs'):
+    '''
+    Adds hydrogens to the graph of a molecule
+    Filter out mols model can't make predictions
 
+    Returns:
+        mol: Mol object
+        data: Corresponding graph of mol
+    '''
     if dataset == 'qm9':
         types = qm9_types
     elif dataset == 'drugs' or dataset == 'bace':
@@ -115,7 +122,7 @@ def featurize_mol_from_smiles(smiles, dataset='drugs'):
     # filter mols rdkit can't intrinsically handle
     mol = Chem.MolFromSmiles(smiles)
     if mol:
-        mol = Chem.AddHs(mol)
+        mol = Chem.AddHs(mol) # Adds hydrogens to the graph of a molecule
     else:
         return None, None
     N = mol.GetNumAtoms()

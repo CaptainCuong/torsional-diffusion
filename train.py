@@ -23,10 +23,10 @@ def train(args, model, optimizer, scheduler, train_loader, val_loader):
 
     print("Starting training...")
     for epoch in range(args.n_epochs):
-
+        
         train_loss, base_train_loss = train_epoch(model, train_loader, optimizer, device)
         print("Epoch {}: Training Loss {}  base loss {}".format(epoch, train_loss, base_train_loss))
-
+        
         val_loss, base_val_loss = test_epoch(model, val_loader, device)
         print("Epoch {}: Validation Loss {} base loss {}".format(epoch, val_loss, base_val_loss))
 
@@ -57,9 +57,9 @@ def boltzmann_train(args, model, optimizer, train_loader, val_loader, resampler)
 
     for epoch in range(args.n_epochs):
         if args.adjust_temp:
-            train_loader.dataset.boltzmann_resampler.temp = (3000 - args.temp) / (epoch + 1) + args.temp
+            train_loader.dataset.boltzmann_resampler.temp = (3000 - args.temp) / (epoch + 1) + args.temp # annealed training, p.24
 
-        train_loss, base_train_loss = train_epoch(model, train_loader, optimizer, device)
+        train_loss, base_train_loss = train_epoch(model, train_loader, optimizer, device) 
         print("Epoch {}: Training Loss {}  base loss {}".format(epoch, train_loss, base_train_loss))
         if epoch % 5 == 0:
             val_ess = val_loader.dataset.resample_all(resampler, temperature=args.temp)

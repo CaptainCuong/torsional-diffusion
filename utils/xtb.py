@@ -2,7 +2,7 @@ import os, subprocess
 from rdkit import Geometry
 from rdkit.Chem import rdmolfiles
 
-my_dir = f"/tmp/{os.getpid()}"
+my_dir = f"./tmp/{os.getpid()}"
 if not os.path.isdir(my_dir):
     os.mkdir(my_dir)
 

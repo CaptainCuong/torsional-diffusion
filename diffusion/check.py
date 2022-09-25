@@ -2,21 +2,16 @@ import numpy as np
 import tqdm
 import os
 
-# Page 4 (Formula 3), 17
+
 def p(x, sigma, N=10):
-    # p_.shape: (5001, 5001)
     p_ = 0
     for i in tqdm.trange(-N, N + 1):
         p_ += np.exp(-(x + 2 * np.pi * i) ** 2 / 2 / sigma ** 2)
     return p_
 
 
-# Page 4, 17
+# Page 4
 def grad(x, sigma, N=10):
-    # x.shape: (5001,)
-    # sigma.shape: (5001, 1)
-    # p_: row: sigma, col: x
-    # p_.shape: (5001, 5001)
     p_ = 0
     for i in tqdm.trange(-N, N + 1):
         p_ += (x + 2 * np.pi * i) / sigma ** 2 * np.exp(-(x + 2 * np.pi * i) ** 2 / 2 / sigma ** 2)
@@ -26,7 +21,7 @@ def grad(x, sigma, N=10):
 X_MIN, X_N = 1e-5, 5000  # relative to pi
 SIGMA_MIN, SIGMA_MAX, SIGMA_N = 3e-3, 2, 5000  # relative to pi
 
-# log(x) & log(sigma) are uniformly distributed
+# x & sigma exponentially grow
 x = 10 ** np.linspace(np.log10(X_MIN), 0, X_N + 1) * np.pi # 1e-5 * np.pi < x < np.pi
 sigma = 10 ** np.linspace(np.log10(SIGMA_MIN), np.log10(SIGMA_MAX), SIGMA_N + 1) * np.pi # 3e-3 * np.pi < sigma < 2 * np.pi
 
@@ -51,7 +46,7 @@ def score(x, sigma): # 0 <= x <= 2*pi
     sigma = np.log(sigma / np.pi) # -6 < sigma < 0.7
     sigma = (sigma - np.log(SIGMA_MIN)) / (np.log(SIGMA_MAX) - np.log(SIGMA_MIN)) * SIGMA_N # 0 < sigma < 5000
     sigma = np.round(np.clip(sigma, 0, SIGMA_N)).astype(int) # 0 <= sigma <= 5000
-    return -sign * score_[sigma, x]
+    return -sign * score_[sigma, x] 
 
 
 def p(x, sigma):
@@ -83,3 +78,21 @@ def score_norm(sigma):
     sigma = (sigma - np.log(SIGMA_MIN)) / (np.log(SIGMA_MAX) - np.log(SIGMA_MIN)) * SIGMA_N
     sigma = np.round(np.clip(sigma, 0, SIGMA_N)).astype(int)
     return score_norm_[sigma]
+
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter('runs/score_plot')
+
+for i in range(len(x)):
+    writer.add_scalar('x', x[i], i)
+
+for i in range(len(sigma)):
+    writer.add_scalar('sigma', sigma[i], i)
+
+for i in range(5):
+    i = i*1000
+    for ind, data in enumerate(p_[i]):
+        writer.add_scalar('p_/%d'%(i), data, ind)
+
+for i in range(len(score_norm_)):
+    writer.add_scalar('score_norm_', score_norm_[i], i)
+

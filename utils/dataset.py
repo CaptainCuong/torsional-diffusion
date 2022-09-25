@@ -7,13 +7,22 @@ import glob, pickle, random
 import os.path as osp
 import torch, tqdm
 import copy
-from torch_geometric.data import Dataset, DataLoader
+from torch_geometric.data import Dataset
+# from torch_geometric.loader import DataLoader
+
 from torch_geometric.transforms import BaseTransform
 from collections import defaultdict
 
 from utils.featurization import dihedral_pattern, featurize_mol, qm9_types, drugs_types
 from utils.torsion import get_transformation_mask, modify_conformer
+from collections.abc import Mapping, Sequence
+from typing import List, Optional, Union
 
+import torch.utils.data
+from torch.utils.data.dataloader import default_collate
+
+from torch_geometric.data import Batch, Dataset
+from torch_geometric.data.data import BaseData
 
 class TorsionNoiseTransform(BaseTransform):
     def __init__(self, sigma_min=0.01 * np.pi, sigma_max=np.pi, boltzmann_weight=False):
@@ -36,10 +45,10 @@ class TorsionNoiseTransform(BaseTransform):
 
         sigma = np.exp(np.random.uniform(low=np.log(self.sigma_min), high=np.log(self.sigma_max)))
         data.node_sigma = sigma * torch.ones(data.num_nodes)
-
         torsion_updates = np.random.normal(loc=0.0, scale=sigma, size=edge_mask.sum())
         data.pos = modify_conformer(data.pos, data.edge_index.T[edge_mask], mask_rotate, torsion_updates)
         data.edge_rotate = torch.tensor(torsion_updates)
+
         return data
 
     def __repr__(self) -> str:
@@ -180,6 +189,19 @@ class ConformerDataset(Dataset):
         data = self.datapoints[idx]
         if self.boltzmann_resampler:
             self.boltzmann_resampler.try_resample(data)
+        '''
+        Data:
+            x=[11, 44]
+            edge_index=[2, 20]
+            edge_attr=[20, 4]
+            z=[11]
+            canonical_smi='C#CC#CCC#C'
+            mol=<rdkit.Chem.rdchem.Mol object at 0x000001D4503A1D50>
+            pos=[1]
+            weights=[1]
+            edge_mask=[20]
+            mask_rotate=[6, 11])
+        '''
         return copy.deepcopy(data)
 
     def open_pickle(self, mol_path):
@@ -236,6 +258,86 @@ class ConformerDataset(Dataset):
             ess.append(resampler.resample(data, temperature=temperature))
         return ess
 
+class Collater:
+    def __init__(self, follow_batch, exclude_keys):
+        self.follow_batch = follow_batch
+        self.exclude_keys = exclude_keys
+
+    def __call__(self, batch):
+        elem = batch[0]
+        if isinstance(elem, BaseData):
+            return Batch.from_data_list(batch, self.follow_batch,
+                                        self.exclude_keys)
+        elif isinstance(elem, torch.Tensor):
+            raise
+            return default_collate(batch)
+        elif isinstance(elem, float):
+            raise
+            return torch.tensor(batch, dtype=torch.float)
+        elif isinstance(elem, int):
+            raise
+            return torch.tensor(batch)
+        elif isinstance(elem, str):
+            raise
+            return batch
+        elif isinstance(elem, Mapping):
+            raise
+            return {key: self([data[key] for data in batch]) for key in elem}
+        elif isinstance(elem, tuple) and hasattr(elem, '_fields'):
+            raise
+            return type(elem)(*(self(s) for s in zip(*batch)))
+        elif isinstance(elem, Sequence) and not isinstance(elem, str):
+            raise
+            return [self(s) for s in zip(*batch)]
+
+        raise TypeError(f'DataLoader found invalid type: {type(elem)}')
+
+    def collate(self, batch):  # Deprecated...
+        return self(batch)
+
+class DataLoader(torch.utils.data.DataLoader):
+    r"""A data loader which merges data objects from a
+    :class:`torch_geometric.data.Dataset` to a mini-batch.
+    Data objects can be either of type :class:`~torch_geometric.data.Data` or
+    :class:`~torch_geometric.data.HeteroData`.
+
+    Args:
+        dataset (Dataset): The dataset from which to load the data.
+        batch_size (int, optional): How many samples per batch to load.
+            (default: :obj:`1`)
+        shuffle (bool, optional): If set to :obj:`True`, the data will be
+            reshuffled at every epoch. (default: :obj:`False`)
+        follow_batch (List[str], optional): Creates assignment batch
+            vectors for each key in the list. (default: :obj:`None`)
+        exclude_keys (List[str], optional): Will exclude each key in the
+            list. (default: :obj:`None`)
+        **kwargs (optional): Additional arguments of
+            :class:`torch.utils.data.DataLoader`.
+    """
+    def __init__(
+        self,
+        dataset: Union[Dataset, List[BaseData]],
+        batch_size: int = 1,
+        shuffle: bool = False,
+        follow_batch: Optional[List[str]] = None,
+        exclude_keys: Optional[List[str]] = None,
+        **kwargs,
+    ):
+
+        if 'collate_fn' in kwargs:
+            del kwargs['collate_fn']
+
+        # Save for PyTorch Lightning < 1.6:
+        self.follow_batch = follow_batch
+        self.exclude_keys = exclude_keys
+
+        super().__init__(
+            dataset,
+            batch_size,
+            shuffle,
+            collate_fn=Collater(follow_batch, exclude_keys),
+            **kwargs,
+        )
 
 def construct_loader(args, modes=('train', 'val'), boltzmann_resampler=None):
     if isinstance(modes, str):

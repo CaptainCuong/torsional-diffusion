@@ -13,7 +13,7 @@ parser.add_argument('--ais_steps', type=int, default=0, help='')
 parser.add_argument('--mcmc_sigma', type=float, default=0.1, help='')
 parser.add_argument('--n_samples', type=int, default=32, help='')
 parser.add_argument('--model_steps', type=int, default=5, help='')
-parser.add_argument('--test_pkl', type=str, default='data/DRUGS/test_mols.pkl', help='')
+parser.add_argument('--test_pkl', type=str, default='data/QM9/test_mols.pkl', help='')
 parser.add_argument('--out', type=str, default='boltzmann.out', help='')
 args = parser.parse_args()
 
