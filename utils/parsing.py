@@ -18,7 +18,7 @@ def parse_train_args():
     parser.add_argument('--n_epochs', type=int, default=250, help='Number of epochs for training')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-3, help='Initial learning rate')
-    parser.add_argument('--num_workers', type=int, default=5, help='Number of workers for preprocessing')
+    parser.add_argument('--num_workers', type=int, default=1, help='Number of workers for preprocessing')
     parser.add_argument('--optimizer', type=str, default='adam', help='Adam optimiser only one supported')
     parser.add_argument('--scheduler', type=str, default='plateau', help='LR scehduler: plateau or none')
     parser.add_argument('--scheduler_patience', type=int, default=20, help='Patience of plateau scheduler')

@@ -8,9 +8,9 @@ from rdkit.Chem import AllChem
 from tqdm import tqdm
 
 parser = ArgumentParser()
-parser.add_argument('--confs', type=str, default='./workdir/qm9_steps20.pkl', help='Path to pickle file with generated conformers')
+parser.add_argument('--confs', type=str, default='test_run/test_data.pkl', help='Path to pickle file with generated conformers')
 parser.add_argument('--test_csv', type=str, default='./data/QM9/test_smiles.csv', help='Path to csv file with list of smiles')
-parser.add_argument('--true_mols', type=str, default='D:/data/QM9/test_mols.pkl', help='Path to pickle file with ground truth conformers')
+parser.add_argument('--true_mols', type=str, default='D:/Github/torsional-diffusion/data/QM9/test_mols.pkl', help='Path to pickle file with ground truth conformers')
 parser.add_argument('--n_workers', type=int, default=1, help='Numer of parallel workers')
 parser.add_argument('--limit_mols', type=int, default=10, help='Limit number of molecules, 0 to evaluate them all')
 parser.add_argument('--dataset', type=str, default="qm9", help='Dataset: drugs, qm9 and xl')
@@ -208,6 +208,21 @@ for i, thresh in enumerate(threshold_ranges):
     print(f'Recall AMR: Mean = {np.nanmean(amr_recall):.4f}, Median = {np.nanmedian(amr_recall):.4f}')
     print(f'Precision Coverage: Mean = {np.mean(coverage_precision_vals) * 100:.2f}, Median = {np.median(coverage_precision_vals) * 100:.2f}')
     print(f'Precision AMR: Mean = {np.nanmean(amr_precision):.4f}, Median = {np.nanmedian(amr_precision):.4f}')
+
+
+report = open('report.csv','w')
+report.write('threshold,Recall Coverage-Mean,Recall Coverage-Median,Recall AMR-Mean,Recall AMR-Median,Precision Coverage-Mean,Precision Coverage-Median,Precision AMR-Mean,Precision AMR-Median\n')
+
+for i, thresh in enumerate(threshold_ranges):
+    coverage_recall_vals = [stat[i] for stat in coverage_recall] + [0] * num_failures
+    coverage_precision_vals = [stat[i] for stat in coverage_precision] + [0] * num_failures
+    report.write(f'{thresh},\
+        {np.mean(coverage_recall_vals) * 100:.2f},{np.median(coverage_recall_vals) * 100:.2f},\
+        {np.nanmean(amr_recall):.4f},{np.nanmedian(amr_recall):.4f},\
+        {np.mean(coverage_precision_vals) * 100:.2f},{np.median(coverage_precision_vals) * 100:.2f},\
+        {np.nanmean(amr_precision):.4f},{np.nanmedian(amr_precision):.4f}\n')
+report.close()
+
 
 print(len(results), 'conformer sets compared', num_failures, 'model failures', np.isnan(amr_recall).sum(),
       'additional failures')

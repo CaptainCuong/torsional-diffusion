@@ -93,6 +93,7 @@ class ConformerDataset(Dataset):
         if limit_molecules:
             split = split[:limit_molecules]
         smiles = np.array(sorted(glob.glob(osp.join(self.root, '*.pickle'))))
+        split = [i for i in split if i < 133111]
         smiles = smiles[split]
 
         self.open_pickles = {}
@@ -336,6 +337,7 @@ class DataLoader(torch.utils.data.DataLoader):
             batch_size,
             shuffle,
             collate_fn=Collater(follow_batch, exclude_keys),
+            pin_memory=True,
             **kwargs,
         )
 

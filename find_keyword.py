@@ -1,7 +1,7 @@
 import os
 
 file_dir = ['./diffusion', './utils']
-keyword = '.*cpu.*'
+keyword = '.*np[.]load.*'
 
 for dir_ in file_dir:
 	os.system('wsl -e sh -c "grep -worne \'' + keyword + '\' ' + dir_ + '"')
