@@ -6,7 +6,9 @@ trash
 wandb
 .ipynb_checkpoints
 test_run
-*.pdb
-*.zip
-*.npy
+**.pdb
+**.zip
+**.npy
+**.png
+**.csv
 workdir

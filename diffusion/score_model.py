@@ -331,8 +331,12 @@ class TensorProductScoreModel(torch.nn.Module):
         bond_attr = node_attr[bonds[0]] + node_attr[bonds[1]]
         # Y(r_ab)
         bonds_sh = o3.spherical_harmonics("2e", bond_vec, normalize=True, normalization='component')
+        # edge_sh.shape: torch.Size([2017, 9])
         edge_sh = self.final_tp(edge_sh, bonds_sh[edge_index[0]]) # Psi
-
+        # bond_vec.shape: torch.Size([107, 3])
+        # bonds_sh.shape: torch.Size([107, 5]) -> bonds_sh[edge_index[0]]:
+        # edge_index.shape: torch.Size([2, 2017])
+        # edge_sh.shape: torch.Size([2017, 45]) = ([2017, 9]) * ([2017, 5])
         edge_attr = torch.cat([edge_attr, node_attr[edge_index[1], :self.ns], bond_attr[edge_index[0], :self.ns]], -1)
         out = self.bond_conv(node_attr, edge_index, edge_attr, edge_sh, out_nodes=data.edge_mask.sum(), reduce='mean')
 
@@ -346,6 +350,8 @@ class TensorProductScoreModel(torch.nn.Module):
             score_norm = torus.score_norm(data.edge_sigma.cpu().numpy())
             score_norm = torch.tensor(score_norm, device=data.x.device)
             data.edge_pred = data.edge_pred * torch.sqrt(score_norm)
+        # bonds.shape: torch.Size([2, 107])
+        # data.edge_pred.shape: torch.Size([107])
         return data
 
     def build_bond_conv_graph(self, data, node_attr):

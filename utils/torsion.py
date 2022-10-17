@@ -20,8 +20,8 @@ def get_transformation_mask(pyg_data):
 
         G2 = G.to_undirected() # Convert to undirected graph
         G2.remove_edge(*edges[i]) # Remove the edges[i]
-        if not nx.is_connected(G2): # If not connected
-            l = list(sorted(nx.connected_components(G2), key=len)[0]) # Smallest connected component
+        if not nx.is_connected(G2): # If not connected (edges[i] is not in a ring) (bridge)
+            l = list(sorted(nx.connected_components(G2), key=len)[0]) # Nodes in smallest connected component
             if len(l) > 1: # Has at least 2 nodes
                 if edges[i, 0] in l:
                     to_rotate.append([]) # Add False(for edges[i]), True(for edges[i+1])

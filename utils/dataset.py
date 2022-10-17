@@ -188,8 +188,8 @@ class ConformerDataset(Dataset):
 
     def get(self, idx):
         data = self.datapoints[idx]
-        if self.boltzmann_resampler:
-            self.boltzmann_resampler.try_resample(data)
+        # if self.boltzmann_resampler:
+        #     self.boltzmann_resampler.try_resample(data)
         '''
         Data:
             x=[11, 44]
@@ -346,7 +346,7 @@ def construct_loader(args, modes=('train', 'val'), boltzmann_resampler=None):
         modes = [modes]
 
     loaders = []
-    transform = TorsionNoiseTransform(sigma_min=args.sigma_min, sigma_max=args.sigma_max,
+    transform = TorsionNoiseTransform(sigma_min=args.sigma_min, sigma_max=args.sigma_max, # perturb torsion angles with noise
                                       boltzmann_weight=args.boltzmann_weight)
     types = qm9_types if args.dataset == 'qm9' else drugs_types
 

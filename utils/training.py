@@ -77,7 +77,7 @@ def train_epoch(model, loader, optimizer, device):
         score_norm = torus.score_norm(data.edge_sigma.cpu().numpy())
         score_norm = torch.tensor(score_norm, device=pred.device)
         loss = ((score - pred) ** 2 / score_norm).mean()
-
+        print(score.shape)
         loss.backward()
         optimizer.step()
         loss_tot += loss.item()

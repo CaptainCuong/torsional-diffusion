@@ -75,6 +75,7 @@ def conformer_match(name, confs):
     if not rotable_bonds: return log_error("no_rotable_bonds")
 
     mol_rdkit.RemoveAllConformers()
+    #Use distance geometry to obtain multiple sets of coordinates for a molecule
     AllChem.EmbedMultipleConfs(mol_rdkit, numConfs=n_confs)
 
     if mol_rdkit.GetNumConformers() != n_confs:
@@ -140,9 +141,9 @@ for i, f in enumerate(files):
     except Exception as e:
         print(e)
         long_term_log['mol_other_failure'] += 1
-        new_confs = None
+        new_confs = None # Set to fail
 
-    if not new_confs:
+    if not new_confs: # If fail
         print(f'{i} Failure nconfs={len(confs)} smi={name}')
     else:
         num_rotable_bonds = new_confs[0]['num_rotable_bonds']

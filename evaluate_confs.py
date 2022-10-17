@@ -6,13 +6,19 @@ import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from tqdm import tqdm
+from copy import deepcopy
+import os
+from rdkit.Chem import Draw
+from matplotlib.colors import ColorConverter
 
 parser = ArgumentParser()
 parser.add_argument('--confs', type=str, default='test_run/test_data.pkl', help='Path to pickle file with generated conformers')
+# parser.add_argument('--confs', type=str, default='test_run/test_data.pkl', help='Path to pickle file with generated conformers')
+parser.add_argument('--stat_report', type=bool, default=True, help='Export statistical reports')
 parser.add_argument('--test_csv', type=str, default='./data/QM9/test_smiles.csv', help='Path to csv file with list of smiles')
 parser.add_argument('--true_mols', type=str, default='D:/Github/torsional-diffusion/data/QM9/test_mols.pkl', help='Path to pickle file with ground truth conformers')
 parser.add_argument('--n_workers', type=int, default=1, help='Numer of parallel workers')
-parser.add_argument('--limit_mols', type=int, default=10, help='Limit number of molecules, 0 to evaluate them all')
+parser.add_argument('--limit_mols', type=int, default=0, help='Limit number of molecules, 0 to evaluate them all')
 parser.add_argument('--dataset', type=str, default="qm9", help='Dataset: drugs, qm9 and xl')
 parser.add_argument('--filter_mols', type=str, default=None, help='If set, is path to list of smiles to test')
 parser.add_argument('--only_alignmol', action='store_true', default=False, help='If set instead of GetBestRMSD, it uses AlignMol (for large molecules)')
@@ -53,10 +59,22 @@ def calc_performance_stats(rmsd_array):
     res in results.values():
     rmsd_array <-- res['rmsd'] : np.array(n_true, n_model)
     '''
-    coverage_recall = np.mean(rmsd_array.min(axis=1, keepdims=True) < threshold, axis=0)
-    amr_recall = rmsd_array.min(axis=1).mean() # min(axis=1): min generated conf for each true conf
-    coverage_precision = np.mean(rmsd_array.min(axis=0, keepdims=True) < np.expand_dims(threshold, 1), axis=1)
-    amr_precision = rmsd_array.min(axis=0).mean()
+    coverage_recall = np.mean(rmsd_array.min(axis=1, keepdims=True) < threshold, axis=0) # List
+    amr_recall = rmsd_array.min(axis=1).mean() # Scalar
+    coverage_precision = np.mean(rmsd_array.min(axis=0, keepdims=True) < np.expand_dims(threshold, 1), axis=1) # List
+    amr_precision = rmsd_array.min(axis=0).mean() # Scalar
+
+    return coverage_recall, amr_recall, coverage_precision, amr_precision
+
+def calc_performance_stats_const_threshold(rmsd_array, const_threshold = 0.5):
+    '''
+    res in results.values():
+    rmsd_array <-- res['rmsd'] : np.array(n_true, n_model)
+    '''
+    coverage_recall = np.mean(rmsd_array.min(axis=1) < const_threshold) # Scalar
+    amr_recall = rmsd_array.min(axis=1).mean() # Scalar
+    coverage_precision = np.mean(rmsd_array.min(axis=0) < const_threshold) # Scalar
+    amr_precision = rmsd_array.min(axis=0).mean() # Scalar
 
     return coverage_recall, amr_recall, coverage_precision, amr_precision
 
@@ -79,7 +97,7 @@ def clean_confs(smi, confs):
     for i, c in enumerate(confs):
         conf_smi = Chem.MolToSmiles(Chem.RemoveHs(c, sanitize=False), isomericSmiles=False)
         if conf_smi == smi:
-            good_ids.append(i)
+            good_ids.append(i) # Append index of valid groundtruth confs
     return [confs[i] for i in good_ids]
 
 ########################## LOAD SMILES
@@ -127,6 +145,17 @@ for smi, corrected_smi in tqdm(zip(rdkit_smiles, corrected_smiles)):
         continue
 
     true_mols[smi] = true_confs = clean_confs(corrected_smi, true_mols[smi]) # clean valid groundtruth confs (conf of true_mols[smi] with smile == corrected_smi )
+    
+    ############ Add to visualization folder ############
+    if not os.path.exists(f'visualization/{smi}'):
+        os.makedirs(f'visualization/{smi}')
+    img = Chem.MolFromSmiles(smi)
+    img = Chem.Draw.MolToImage(img, highlightAtoms=[1,2], highlightColor=ColorConverter().to_rgb('aqua'))
+    img.save(f'visualization/{smi}/mol_img.png')
+    if corrected_smi in model_preds:
+        [Chem.rdmolfiles.MolToPDBFile(model_preds[corrected_smi][i], f'visualization/{smi}/conf_{i}.pdb') for i in range(len(model_preds[corrected_smi]))]
+        [Chem.rdmolfiles.MolToPDBFile(true_mols[smi][i], f'visualization/{smi}/std_{i}.pdb') for i in range(len(true_mols[smi]))]
+    ############################################################
 
     if len(true_confs) == 0:
         print(f'poor ground truth conformers: {corrected_smi}')
@@ -156,10 +185,11 @@ def worker_fn(job):
     model_confs = model_preds[correct_smi]
     tc = true_confs[i_true]
     rmsds = []
+
     for mc in model_confs:
         try:
             if args.only_alignmol:
-                rmsd = AllChem.AlignMol(Chem.RemoveHs(tc), Chem.RemoveHs(mc))
+                rmsd = AllChem.AlignMol(Chem.RemoveHs(tc), Chem. veHs(mc))
             else:
                 rmsd = AllChem.GetBestRMS(Chem.RemoveHs(tc), Chem.RemoveHs(mc))
             rmsds.append(rmsd)
@@ -172,7 +202,7 @@ def worker_fn(job):
 
 def populate_results(res):
     '''
-    Add $rmsd into $results
+    Add $rmsd of each generated conf wrt a groundtruth conf into $results
     '''
     smi, correct_smi, i_true, rmsds = res
     results[(smi, correct_smi)]['rmsd'][i_true] = rmsds
@@ -190,39 +220,85 @@ else:
 for res in tqdm(map_fn(worker_fn, jobs), total=len(jobs)):
     populate_results(res)
 
-if args.n_workers > 1:
-    p.__exit__(None, None, None)
+#################### STAT REPORT ####################
+if args.stat_report:
+    temp_res = []
+    for key, val in results.items():
+        temp_dict = deepcopy(val)
+        temp_dict['smi'] = key[0]
+        temp_dict['rmsd'] = calc_performance_stats_const_threshold(val['rmsd'], const_threshold = 0.5)
+        temp_res.append(temp_dict)
 
-stats = []
-for res in results.values():
-    stats_ = calc_performance_stats(res['rmsd'])
-    cr, mr, cp, mp = stats_
-    stats.append(stats_)
-coverage_recall, amr_recall, coverage_precision, amr_precision = zip(*stats)
+    def sort_cov_r(dict):
+        return -dict['rmsd'][0]
 
-for i, thresh in enumerate(threshold_ranges):
-    print('threshold', thresh)
-    coverage_recall_vals = [stat[i] for stat in coverage_recall] + [0] * num_failures
-    coverage_precision_vals = [stat[i] for stat in coverage_precision] + [0] * num_failures
-    print(f'Recall Coverage: Mean = {np.mean(coverage_recall_vals) * 100:.2f}, Median = {np.median(coverage_recall_vals) * 100:.2f}')
-    print(f'Recall AMR: Mean = {np.nanmean(amr_recall):.4f}, Median = {np.nanmedian(amr_recall):.4f}')
-    print(f'Precision Coverage: Mean = {np.mean(coverage_precision_vals) * 100:.2f}, Median = {np.median(coverage_precision_vals) * 100:.2f}')
-    print(f'Precision AMR: Mean = {np.nanmean(amr_precision):.4f}, Median = {np.nanmedian(amr_precision):.4f}')
+    def sort_amr_r(dict):
+        return dict['rmsd'][1] 
+
+    def sort_cov_p(dict):
+        return -dict['rmsd'][2] 
+
+    def sort_amr_p(dict):
+        return dict['rmsd'][3] 
+
+    report = open('sort_cov_r.csv', 'w')
+    temp_res.sort(key=sort_cov_r)
+    for idx, x in enumerate(temp_res):
+        report.write(f"{idx+1},{x['smi']},{x['rmsd'][0]}\n")
+    report.close()
+
+    report = open('sort_amr_r.csv', 'w')
+    temp_res.sort(key=sort_amr_r)
+    for idx, x in enumerate(temp_res):
+        report.write(f"{idx+1},{x['smi']},{x['rmsd'][1]}\n")
+    report.close()
+
+    report = open('sort_cov_p.csv', 'w')
+    temp_res.sort(key=sort_cov_p)
+    for idx, x in enumerate(temp_res):
+        report.write(f"{idx+1},{x['smi']},{x['rmsd'][2]}\n")
+    report.close()
+
+    report = open('sort_amr_p.csv', 'w')
+    temp_res.sort(key=sort_amr_p)
+    for idx, x in enumerate(temp_res):
+        report.write(f"{idx+1},{x['smi']},{x['rmsd'][3]}\n")
+    report.close()
+############################################################
+
+# if args.n_workers > 1:
+#     p.__exit__(None, None, None)
+
+# stats = []
+# for res in results.values():
+#     stats_ = calc_performance_stats(res['rmsd'])
+#     cr, mr, cp, mp = stats_
+#     stats.append(stats_)
+# coverage_recall, amr_recall, coverage_precision, amr_precision = zip(*stats)
+
+# for i, thresh in enumerate(threshold_ranges):
+#     print('threshold', thresh)
+#     coverage_recall_vals = [stat[i] for stat in coverage_recall] + [0] * num_failures
+#     coverage_precision_vals = [stat[i] for stat in coverage_precision] + [0] * num_failures
+#     print(f'Recall Coverage: Mean = {np.mean(coverage_recall_vals) * 100:.2f}, Median = {np.median(coverage_recall_vals) * 100:.2f}')
+#     print(f'Recall AMR: Mean = {np.nanmean(amr_recall):.4f}, Median = {np.nanmedian(amr_recall):.4f}')
+#     print(f'Precision Coverage: Mean = {np.mean(coverage_precision_vals) * 100:.2f}, Median = {np.median(coverage_precision_vals) * 100:.2f}')
+#     print(f'Precision AMR: Mean = {np.nanmean(amr_precision):.4f}, Median = {np.nanmedian(amr_precision):.4f}')
 
 
-report = open('report.csv','w')
-report.write('threshold,Recall Coverage-Mean,Recall Coverage-Median,Recall AMR-Mean,Recall AMR-Median,Precision Coverage-Mean,Precision Coverage-Median,Precision AMR-Mean,Precision AMR-Median\n')
+# report = open('report.csv','w')
+# report.write('threshold,Recall Coverage-Mean,Recall Coverage-Median,Recall AMR-Mean,Recall AMR-Median,Precision Coverage-Mean,Precision Coverage-Median,Precision AMR-Mean,Precision AMR-Median\n')
 
-for i, thresh in enumerate(threshold_ranges):
-    coverage_recall_vals = [stat[i] for stat in coverage_recall] + [0] * num_failures
-    coverage_precision_vals = [stat[i] for stat in coverage_precision] + [0] * num_failures
-    report.write(f'{thresh},\
-        {np.mean(coverage_recall_vals) * 100:.2f},{np.median(coverage_recall_vals) * 100:.2f},\
-        {np.nanmean(amr_recall):.4f},{np.nanmedian(amr_recall):.4f},\
-        {np.mean(coverage_precision_vals) * 100:.2f},{np.median(coverage_precision_vals) * 100:.2f},\
-        {np.nanmean(amr_precision):.4f},{np.nanmedian(amr_precision):.4f}\n')
-report.close()
+# for i, thresh in enumerate(threshold_ranges):
+#     coverage_recall_vals = [stat[i] for stat in coverage_recall] + [0] * num_failures
+#     coverage_precision_vals = [stat[i] for stat in coverage_precision] + [0] * num_failures
+#     report.write(f'{thresh},\
+#         {np.mean(coverage_recall_vals) * 100:.2f},{np.median(coverage_recall_vals) * 100:.2f},\
+#         {np.nanmean(amr_recall):.4f},{np.nanmedian(amr_recall):.4f},\
+#         {np.mean(coverage_precision_vals) * 100:.2f},{np.median(coverage_precision_vals) * 100:.2f},\
+#         {np.nanmean(amr_precision):.4f},{np.nanmedian(amr_precision):.4f}\n')
+# report.close()
 
 
-print(len(results), 'conformer sets compared', num_failures, 'model failures', np.isnan(amr_recall).sum(),
-      'additional failures')
+# print(len(results), 'conformer sets compared', num_failures, 'model failures', np.isnan(amr_recall).sum(),
+#       'additional failures')

@@ -1,13 +1,22 @@
 from rdkit.Chem import Draw
 import pickle
 from rdkit.Chem import AllChem
+from rdkit import Chem
+import os
+from matplotlib.colors import ColorConverter 
 
-file = open('data/QM9/standardized_pickles/000.pickle', 'rb')
-file = pickle.load(file)
+data = pickle.load(open('workdir/qm9_steps20.pkl', 'rb'))
+standard_data = pickle.load(open('data/QM9/test_mols.pkl', 'rb'))
 
-mol_names = list(file.keys())
-for mol_name in mol_names:
-	mol = file[mol_name]['conformers'][0]['rd_mol']
-	print(AllChem.Compute2DCoords(mol))
-	print(mol_name)
-	Draw.MolToFile(mol,'data/mol_image/'+mol_name+'.png')    
+for key, mols in list(data.items()):
+	if key not in standard_data:
+		continue
+	if not os.path.exists(f'visualization/{key}'):
+		os.makedirs(f'visualization/{key}')
+	img = Chem.MolFromSmiles(key)
+	img = Chem.Draw.MolToImage(img, highlightAtoms=[1,2], highlightColor=ColorConverter().to_rgb('aqua'))
+	img.save(f'visualization/{key}/mol_img.png')
+	for i in range(len(mols)):
+		Chem.rdmolfiles.MolToPDBFile(mols[i], f'visualization/{key}/conf_{i}.pdb')
+	for i in range(len(standard_data[key])):
+		Chem.rdmolfiles.MolToPDBFile(standard_data[key][i], f'visualization/{key}/std_{i}.pdb')

@@ -195,13 +195,13 @@ def mmff_func(mol):
 def clean_confs(smi, confs, limit=None):
     good_ids = []
     try:
-        smi = Chem.MolToSmiles(Chem.MolFromSmiles(smi), isomericSmiles=False)
+        smi = Chem.MolToSmiles(Chem.MolFromSmiles(smi), isomericSmiles=False) # standard smi (because smiles may contains hydrogen)
     except Exception as e:
         print('Error', smi, e)
         return []
     for i, c in enumerate(confs):
         conf_smi = Chem.MolToSmiles(Chem.RemoveHs(c['rd_mol'], sanitize=False),
-                                    isomericSmiles=False)
+                                    isomericSmiles=False) # used to compare with the standard smi
         if conf_smi == smi:
             good_ids.append(i)
         if len(good_ids) == limit:

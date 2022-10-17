@@ -115,7 +115,7 @@ def sample_confs(raw_smi, n_confs, smi):
                                       pdb=args.dump_pymol, seed_confs=seed_confs)
     else:
         conformers, pdb = embed_seeds(mol, data, n_confs, single_conf=args.single_conf,
-                                      pdb=args.dump_pymol, embed_func=embed_func, mmff=args.pre_mmff)
+                                      pdb=args.dump_pymol, embed_func=embed_func, mmff=args.pre_mmff) # Add $mol into $data
     if not conformers:
         print("Failed to embed", smi)
         return None
