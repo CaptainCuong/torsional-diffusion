@@ -94,8 +94,8 @@ def sample_confs(raw_smi, n_confs, smi):
     1) get_seed: Convert smile to graph
     2) embed_seeds: Separate conformers (1 mol, 1 conformer)
     3) perturb_seeds: Sample uniform torsion angle
-    4) sample:
-    5) pyg_to_mol:
+    4) sample: Sample by model
+    5) pyg_to_mol: convert pyg data to rdkit mol
     6) populate_likelihood: 
     '''
     if args.seed_confs:
