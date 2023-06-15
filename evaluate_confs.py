@@ -13,7 +13,6 @@ from matplotlib.colors import ColorConverter
 
 parser = ArgumentParser()
 parser.add_argument('--confs', type=str, default='test_run/test_data.pkl', help='Path to pickle file with generated conformers')
-# parser.add_argument('--confs', type=str, default='test_run/test_data.pkl', help='Path to pickle file with generated conformers')
 parser.add_argument('--stat_report', type=bool, default=True, help='Export statistical reports')
 parser.add_argument('--test_csv', type=str, default='./data/QM9/test_smiles.csv', help='Path to csv file with list of smiles')
 parser.add_argument('--true_mols', type=str, default='D:/Github/torsional-diffusion/data/QM9/test_mols.pkl', help='Path to pickle file with ground truth conformers')

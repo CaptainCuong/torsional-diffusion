@@ -89,8 +89,10 @@ else:
 
 
 def sample_confs(raw_smi, n_confs, smi):
-    print(raw_smi)
     '''
+    raw_smi (str): e.g. C#CC#C[C@@H](CC)CO
+    n_confs (int): e.g. 58
+    smi (str): e.g. C#CC#C[C@@H](CC)CO
     1) get_seed: Convert smile to graph
     2) embed_seeds: Separate conformers (1 mol, 1 conformer)
     3) perturb_seeds: Sample uniform torsion angle
@@ -103,7 +105,7 @@ def sample_confs(raw_smi, n_confs, smi):
     elif args.seed_mols:
         mol, data = get_seed(smi, seed_confs=seed_confs, dataset=args.dataset)
         mol.RemoveAllConformers()
-    else:
+    else: # Here
         mol, data = get_seed(smi, dataset=args.dataset)
     if not mol:
         print('Failed to get seed', smi)
@@ -116,6 +118,7 @@ def sample_confs(raw_smi, n_confs, smi):
     else:
         conformers, pdb = embed_seeds(mol, data, n_confs, single_conf=args.single_conf,
                                       pdb=args.dump_pymol, embed_func=embed_func, mmff=args.pre_mmff) # Add $mol into $data
+
     if not conformers:
         print("Failed to embed", smi)
         return None

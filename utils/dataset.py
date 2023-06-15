@@ -23,7 +23,7 @@ from torch.utils.data.dataloader import default_collate
 
 from torch_geometric.data import Batch, Dataset
 from torch_geometric.data.data import BaseData
-
+from utils.tree import tree_converter_dfs, tree_converter_bfs, break_loop
 class TorsionNoiseTransform(BaseTransform):
     def __init__(self, sigma_min=0.01 * np.pi, sigma_max=np.pi, boltzmann_weight=False):
         self.sigma_min = sigma_min
@@ -173,6 +173,10 @@ class ConformerDataset(Dataset):
         if not data:
             self.failures['featurize_mol_failed'] += 1
             return False
+
+        tree, converted = tree_converter_dfs(data)
+        if converted:
+            break_loop(data, tree)
 
         edge_mask, mask_rotate = get_transformation_mask(data)
         if np.sum(edge_mask) < 0.5:

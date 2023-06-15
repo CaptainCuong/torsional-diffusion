@@ -10,7 +10,7 @@ from torch_geometric.loader import DataLoader
 from rdkit import Chem, Geometry
 from rdkit.Chem import AllChem
 from utils.visualise import PDBFile
-
+from utils.tree import *
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 still_frames = 10
 
@@ -46,6 +46,15 @@ def get_seed(smi, seed_confs=None, dataset='drugs'):
         mol, data = featurize_mol_from_smiles(smi, dataset=dataset) # Return graph from smile
         if not mol:
             return None, None
+    '''
+    Data(x=[19, 44], edge_index=[2, 36], edge_attr=[36, 4], z=[19], name='C#CC#C[C@@H](CC)CO')
+    '''
+    # Get tree
+    # tree, converted = tree_converter_dfs(data)
+    # if converted:
+    #     break_loop(data, tree)
+
+    # Get rotate mask
     data.edge_mask, data.mask_rotate = get_transformation_mask(data) # Get rotatable bond
     data.edge_mask = torch.tensor(data.edge_mask)
     return mol, data
@@ -151,7 +160,7 @@ def sample(conformers, model, sigma_max=np.pi, sigma_min=0.01 * np.pi, steps=20,
     eps = 1 / steps
 
     for batch_idx, data in enumerate(loader):
-
+        
         dlogp = torch.zeros(data.num_graphs)
         data_gpu = copy.deepcopy(data).to(device)
         for sigma_idx, sigma in enumerate(sigma_schedule):
@@ -189,9 +198,10 @@ def sample(conformers, model, sigma_max=np.pi, sigma_min=0.01 * np.pi, steps=20,
 
 def pyg_to_mol(mol, data, mmff=False, rmsd=True, copy=True):
     if not mol.GetNumConformers(): # If there is no confs.
-        conformer = Chem.Conformer(mol.GetNumAtoms()) # The class to store 2D or 3D conformation of a molecule
+        conformer = Chem.Conformer(mol.GetNumAtoms()) # The class to store 2D or 3D conformation of a molecule. Create a psuedo conformer (placeholder)
         mol.AddConformer(conformer)
     coords = data.pos
+    
     if type(coords) is not np.ndarray:
         coords = coords.double().numpy()
 

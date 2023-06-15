@@ -121,6 +121,7 @@ def featurize_mol_from_smiles(smiles, dataset='drugs'):
 
     # filter mols rdkit can't intrinsically handle
     mol = Chem.MolFromSmiles(smiles)
+    
     if mol:
         mol = Chem.AddHs(mol) # Adds hydrogens to the graph of a molecule
     else:

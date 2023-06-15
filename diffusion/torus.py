@@ -31,6 +31,11 @@ x = 10 ** np.linspace(np.log10(X_MIN), 0, X_N + 1) * np.pi # 1e-5 * np.pi < x < 
 sigma = 10 ** np.linspace(np.log10(SIGMA_MIN), np.log10(SIGMA_MAX), SIGMA_N + 1) * np.pi # 3e-3 * np.pi < sigma < 2 * np.pi
 
 # Precomputed score. Page 4
+'''
+2 dimension
+    dim 0: uniformly distributed by log(sigma)
+    dim 1: uniformly distributed by log(x)
+'''
 if os.path.exists('.p.npy'):
     p_ = np.load('.p.npy')
     score_ = np.load('.score.npy')
@@ -38,11 +43,18 @@ else:
     p_ = p(x, sigma[:, None], N=100)
     np.save('.p.npy', p_)
 
+    '''
+    p = log(sum())
+    --> score = d_sum()/sum()
+    '''
     score_ = grad(x, sigma[:, None], N=100) / p_
     np.save('.score.npy', score_)
 
 
 def score(x, sigma): # 0 <= x <= 2*pi
+    '''
+    Convert to index of (sigma) and (x) in score_
+    '''
     x = (x + np.pi) % (2 * np.pi) - np.pi # -pi < x < pi
     sign = np.sign(x)
     x = np.log(np.abs(x) / np.pi) # -22.7 < x < -2
@@ -75,7 +87,7 @@ score_norm_ = score(
     sample(sigma[None].repeat(10000, 0).flatten()), # repeat 10000 times in dimension 0, then flattening into 1 dimension
     sigma[None].repeat(10000, 0).flatten()
 ).reshape(10000, -1)
-score_norm_ = (score_norm_ ** 2).mean(0)
+score_norm_ = (score_norm_ ** 2).mean(0) # Expected score^2 for each sigma
 
 
 def score_norm(sigma):

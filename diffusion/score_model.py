@@ -14,190 +14,6 @@ from torch.utils.tensorboard import SummaryWriter
 from e3nn.util.jit import compile_mode
 
 
-# @compile_mode('unsupported')
-# class BatchNorm(nn.Module):
-#     """Batch normalization for orthonormal representations
-
-#     It normalizes by the norm of the representations.
-#     Note that the norm is invariant only for orthonormal representations.
-#     Irreducible representations `wigner_D` are orthonormal.
-
-#     Parameters
-#     ----------
-#     irreps : `o3.Irreps`
-#         representation
-
-#     eps : float
-#         avoid division by zero when we normalize by the variance
-
-#     momentum : float
-#         momentum of the running average
-
-#     affine : bool
-#         do we have weight and bias parameters
-
-#     reduce : {'mean', 'max'}
-#         method used to reduce
-
-#     instance : bool
-#         apply instance norm instead of batch norm
-#     """
-#     def __init__(self, irreps, eps=1e-5, momentum=0.1, affine=True, reduce='mean', instance=False, normalization='component'):
-#         super().__init__()
-
-#         self.irreps = o3.Irreps(irreps)
-#         self.eps = eps
-#         self.momentum = momentum
-#         self.affine = affine
-#         self.instance = instance
-
-#         num_scalar = sum(mul for mul, ir in self.irreps if ir.is_scalar())
-#         num_features = self.irreps.num_irreps
-
-#         if self.instance:
-#             self.register_buffer('running_mean', None)
-#             self.register_buffer('running_var', None)
-#         else:
-#             self.register_buffer('running_mean', torch.zeros(num_scalar))
-#             self.register_buffer('running_var', torch.ones(num_features))
-
-#         if affine:
-#             self.weight = nn.Parameter(torch.ones(num_features))
-#             self.bias = nn.Parameter(torch.zeros(num_scalar))
-#         else:
-#             self.register_parameter('weight', None)
-#             self.register_parameter('bias', None)
-
-#         assert isinstance(reduce, str), "reduce should be passed as a string value"
-#         assert reduce in ['mean', 'max'], "reduce needs to be 'mean' or 'max'"
-#         self.reduce = reduce
-
-#         assert normalization in ['norm', 'component'], "normalization needs to be 'norm' or 'component'"
-#         self.normalization = normalization
-
-#     def __repr__(self):
-#         return f"{self.__class__.__name__} ({self.irreps}, eps={self.eps}, momentum={self.momentum})"
-
-#     def _roll_avg(self, curr, update):
-#         return (1 - self.momentum) * curr + self.momentum * update.detach()
-
-#     def forward(self, input):
-#         """evaluate
-
-#         Parameters
-#         ----------
-#         input : `torch.Tensor`
-#             tensor of shape ``(batch, ..., irreps.dim)``
-
-#         Returns
-#         -------
-#         `torch.Tensor`
-#             tensor of shape ``(batch, ..., irreps.dim)``
-#         """
-#         batch, *size, dim = input.shape
-#         input = input.reshape(batch, -1, dim)  # [batch, sample, stacked features]
-
-#         if self.training and not self.instance:
-#             new_means = []
-#             new_vars = []
-
-#         fields = []
-#         ix = 0
-#         irm = 0
-#         irv = 0
-#         iw = 0
-#         ib = 0
-#         print('*'*10)
-#         print(self.irreps)
-#         check_state = False
-#         check_append = False
-#         check_scalar = False
-#         for mul, ir in self.irreps:
-#             check_state = True
-#             d = ir.dim
-#             field = input[:, :, ix: ix + mul * d]  # [batch, sample, mul * repr]
-#             ix += mul * d
-
-#             # [batch, sample, mul, repr]
-#             field = field.reshape(batch, -1, mul, d)
-#             if ir.is_scalar():  # scalars
-#                 check_scalar = True
-#                 if self.training or self.instance:
-#                     if self.instance:
-#                         field_mean = field.mean(1).reshape(batch, mul)  # [batch, mul]
-#                     else:
-#                         field_mean = field.mean([0, 1]).reshape(mul)  # [mul]
-#                         check_append = True
-#                         new_means.append(
-#                             self._roll_avg(self.running_mean[irm:irm + mul], field_mean)
-#                         )
-#                 else:
-#                     field_mean = self.running_mean[irm: irm + mul]
-#                 irm += mul
-
-#                 # [batch, sample, mul, repr]
-#                 field = field - field_mean.reshape(-1, 1, mul, 1)
-
-#             if self.training or self.instance:
-#                 if self.normalization == 'norm':
-#                     field_norm = field.pow(2).sum(3)  # [batch, sample, mul]
-#                 elif self.normalization == 'component':
-#                     field_norm = field.pow(2).mean(3)  # [batch, sample, mul]
-#                 else:
-#                     raise ValueError("Invalid normalization option {}".format(self.normalization))
-
-#                 if self.reduce == 'mean':
-#                     field_norm = field_norm.mean(1)  # [batch, mul]
-#                 elif self.reduce == 'max':
-#                     field_norm = field_norm.max(1).values  # [batch, mul]
-#                 else:
-#                     raise ValueError("Invalid reduce option {}".format(self.reduce))
-
-#                 if not self.instance:
-#                     field_norm = field_norm.mean(0)  # [mul]
-#                     new_vars.append(self._roll_avg(self.running_var[irv: irv + mul], field_norm))
-#             else:
-#                 field_norm = self.running_var[irv: irv + mul]
-#             irv += mul
-
-#             field_norm = (field_norm + self.eps).pow(-0.5)  # [(batch,) mul]
-
-#             if self.affine:
-#                 weight = self.weight[iw: iw + mul]  # [mul]
-#                 iw += mul
-
-#                 field_norm = field_norm * weight  # [(batch,) mul]
-
-#             field = field * field_norm.reshape(-1, 1, mul, 1)  # [batch, sample, mul, repr]
-
-#             if self.affine and ir.is_scalar():  # scalars
-#                 bias = self.bias[ib: ib + mul]  # [mul]
-#                 ib += mul
-#                 field += bias.reshape(mul, 1)  # [batch, sample, mul, repr]
-
-#             fields.append(field.reshape(batch, -1, mul * d))  # [batch, sample, mul * repr]
-#         print('In loop: ', check_state)
-#         print('Scalar: ', check_scalar)
-#         print('Already append: ', check_append)
-#         if ix != dim:
-#             fmt = "`ix` should have reached input.size(-1) ({}), but it ended at {}"
-#             msg = fmt.format(dim, ix)
-#             raise AssertionError(msg)
-
-#         if self.training and not self.instance:
-#             assert irm == self.running_mean.numel()
-#             assert irv == self.running_var.size(0)
-#         if self.affine:
-#             assert iw == self.weight.size(0)
-#             assert ib == self.bias.numel()
-#         print('*'*10)
-#         if self.training and not self.instance:
-#             torch.cat(new_means, out=self.running_mean)
-#             torch.cat(new_vars, out=self.running_var)
-
-#         output = torch.cat(fields, dim=2)  # [batch, sample, stacked features]
-#         return output.reshape(batch, *size, dim)
-
 class TensorProductConvLayer(torch.nn.Module):
     def __init__(self, in_irreps, sh_irreps, out_irreps, n_edge_features, residual=True, batch_norm=True):
         super(TensorProductConvLayer, self).__init__()
@@ -205,7 +21,9 @@ class TensorProductConvLayer(torch.nn.Module):
         self.out_irreps = out_irreps
         self.sh_irreps = sh_irreps
         self.residual = residual
-
+        # https://github.com/e3nn/e3nn/blob/main/e3nn/o3/_tensor_product/_tensor_product.py#L74
+        # shared_weights: whether the learnable weights are shared among the input's extra dimensions
+        # shared_weights = False: each graph (batch) has different weights
         self.tp = tp = o3.FullyConnectedTensorProduct(in_irreps, sh_irreps, out_irreps, shared_weights=False)
 
         self.fc = nn.Sequential(
@@ -216,19 +34,26 @@ class TensorProductConvLayer(torch.nn.Module):
         self.batch_norm = BatchNorm(out_irreps) if batch_norm else None
 
     def forward(self, node_attr, edge_index, edge_attr, edge_sh, out_nodes=None, reduce='mean'):
-
+        '''
+        node_attr: [503, 32]
+        edge_index: Shape [2, 7258]
+        edge_attr: Shape [7258, 96]
+        edge_sh: Shape [7258, 9]
+        '''
         edge_src, edge_dst = edge_index
+        # o3.FullyConnectedTensorProduct(in_irreps, sh_irreps, out_irreps)
         tp = self.tp(node_attr[edge_dst], edge_sh, self.fc(edge_attr))
 
         out_nodes = out_nodes or node_attr.shape[0]
         out = scatter(tp, edge_src, dim=0, dim_size=out_nodes, reduce=reduce)
+        
         if self.residual:
             padded = F.pad(node_attr, (0, out.shape[-1] - node_attr.shape[-1]))
             out = out + padded
-
+        
         if self.batch_norm:
             out = self.batch_norm(out)
-
+        
         return out
 
 
@@ -315,31 +140,61 @@ class TensorProductScoreModel(torch.nn.Module):
         )
 
     def forward(self, data):
+        '''
+        1) Build Conv Graph:
+        2) Message Passing Layer (TensorProductConvLayer)
+        3) 
+        '''
         node_attr, edge_index, edge_attr, edge_sh = self.build_conv_graph(data)
         src, dst = edge_index
 
-        node_attr = self.node_embedding(node_attr)
-        edge_attr = self.edge_embedding(edge_attr)
-
+        '''
+        self.node_embedding: Compress to (ns) features - input of TensorProductScoreModel
+            Linear --> Relu --> Linear
+        self.edge_embedding: Compress to (ns) features - input of TensorProductScoreModel
+            Linear --> Relu --> Linear
+        self.conv_layers: ModuleList(List[TensorProductConvLayer])
+        '''
+        node_attr = self.node_embedding(node_attr) # Shape: [480, 32]
+        edge_attr = self.edge_embedding(edge_attr) # Shape: [6576, 32]
+    
         for layer in self.conv_layers:
             edge_attr_ = torch.cat([edge_attr, node_attr[src, :self.ns], node_attr[dst, :self.ns]], -1)
             node_attr = layer(node_attr, edge_index, edge_attr_, edge_sh, reduce='mean')
-
-        bonds, edge_index, edge_attr, edge_sh = self.build_bond_conv_graph(data, node_attr)
+            '''
+            edge_attr_: Accumulate edge attribute and 2 updated node attributes on an edge 
+                    Shape [6576, 96], [6576, 96], [6576, 96], [6576, 96]
+            edge_attr: Accumulate attributes of 2 nodes on an edge 
+                    Shape [6576, 32], [6576, 32], [6576, 32], [6576, 32]
+            node_attr: 
+                    Shape [480, 56], [480, 80], [480, 112], [480, 112]
+            '''
+        
         #######################
-        bond_vec = data.pos[bonds[1]] - data.pos[bonds[0]]
-        bond_attr = node_attr[bonds[0]] + node_attr[bonds[1]]
-        # Y(r_ab)
+        '''
+        Build torque graph
+
+        bonds: Rotatable bonds
+        edge_index: Midpoint of Rotatable bonds --> Node near rotatable bonds
+        edge_attr: Attributes of edge from (Midpoint of Rotatable bonds) to (Node near rotatable bonds)
+        edge_sh: Spherical harmonics of (edge_attr)
+        '''
+        bonds, edge_index, edge_attr, edge_sh = self.build_bond_conv_graph(data, node_attr)
+        bond_vec = data.pos[bonds[1]] - data.pos[bonds[0]] # Rotatable vectors
+        bond_attr = node_attr[bonds[0]] + node_attr[bonds[1]] # Attribute of Rotatable bonds/Midpoint of Rotatable bonds
+        # Y^2(r_{bond})
         bonds_sh = o3.spherical_harmonics("2e", bond_vec, normalize=True, normalization='component')
         # edge_sh.shape: torch.Size([2017, 9])
+        # Y(r_{pos}) x Y^2(r_{bond})
         edge_sh = self.final_tp(edge_sh, bonds_sh[edge_index[0]]) # Psi
         # bond_vec.shape: torch.Size([107, 3])
         # bonds_sh.shape: torch.Size([107, 5]) -> bonds_sh[edge_index[0]]:
         # edge_index.shape: torch.Size([2, 2017])
         # edge_sh.shape: torch.Size([2017, 45]) = ([2017, 9]) * ([2017, 5])
         edge_attr = torch.cat([edge_attr, node_attr[edge_index[1], :self.ns], bond_attr[edge_index[0], :self.ns]], -1)
+        # Aggregate torque
         out = self.bond_conv(node_attr, edge_index, edge_attr, edge_sh, out_nodes=data.edge_mask.sum(), reduce='mean')
-
+        
         out = self.final_linear(out)
         #######################
         data.edge_pred = out.squeeze()
@@ -380,7 +235,7 @@ class TensorProductScoreModel(torch.nn.Module):
         '''
         Add edges + attributes within radius
         '''
-        node_sigma = torch.log(data.node_sigma / self.sigma_min) / np.log(self.sigma_max / self.sigma_min) * 10000
+        node_sigma = data.node_sigma
         node_sigma_emb = get_timestep_embedding(node_sigma, self.sigma_embed_dim)
         edge_sigma_emb = node_sigma_emb[edge_index[0].long()]
         edge_attr = torch.cat([edge_attr, edge_sigma_emb], 1)

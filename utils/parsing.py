@@ -24,7 +24,7 @@ def parse_train_args():
     parser.add_argument('--scheduler_patience', type=int, default=20, help='Patience of plateau scheduler')
     parser.add_argument('--sigma_min', type=float, default=0.01*3.14, help='Minimum sigma used for training')
     parser.add_argument('--sigma_max', type=float, default=3.14, help='Maximum sigma used for training')
-    parser.add_argument('--limit_train_mols', type=int, default=0, help='Limit to the number of molecules in dataset, 0 uses them all')
+    parser.add_argument('--limit_train_mols', type=int, default=1000, help='Limit to the number of molecules in dataset, 0 uses them all')
     parser.add_argument('--boltzmann_weight', action='store_true', default=False, help='Whether to sample conformers based on B.w.')
 
     # Feature arguments

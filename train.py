@@ -8,7 +8,8 @@ from utils.training import train_epoch, test_epoch
 from utils.utils import get_model, get_optimizer_and_scheduler, save_yaml_file
 from utils.boltzmann import BoltzmannResampler
 from argparse import Namespace
-
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
 RDLogger.DisableLog('rdApp.*')
 
 """
@@ -16,6 +17,8 @@ RDLogger.DisableLog('rdApp.*')
     The hyperparameters are taken from utils/parsing.py and can be given as arguments
 """
 
+log_dir = 'runs/timesteps'+ datetime.now().strftime("%Y%m%d-%H%M%S")
+writer = SummaryWriter(log_dir)
 
 def train(args, model, optimizer, scheduler, train_loader, val_loader):
     best_val_loss = math.inf
@@ -26,10 +29,11 @@ def train(args, model, optimizer, scheduler, train_loader, val_loader):
         
         train_loss, base_train_loss = train_epoch(model, train_loader, optimizer, device)
         print("Epoch {}: Training Loss {}  base loss {}".format(epoch, train_loss, base_train_loss))
+        writer.add_scalar(f'Loss_tree/train', train_loss, epoch)
         
         val_loss, base_val_loss = test_epoch(model, val_loader, device)
         print("Epoch {}: Validation Loss {} base loss {}".format(epoch, val_loss, base_val_loss))
-
+        writer.add_scalar(f'Loss_tree/test', val_loss, epoch)
         if scheduler:
             scheduler.step(val_loss)
 

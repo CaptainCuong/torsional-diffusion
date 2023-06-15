@@ -67,6 +67,7 @@ def train_epoch(model, loader, optimizer, device):
         edge_sigma=[No_rotatable_bonds]
         '''
         pred = data.edge_pred
+        print(pred.shape)
         try:
             score = torus.score(
                 data.edge_rotate.cpu().numpy(),
@@ -77,7 +78,6 @@ def train_epoch(model, loader, optimizer, device):
         score_norm = torus.score_norm(data.edge_sigma.cpu().numpy())
         score_norm = torch.tensor(score_norm, device=pred.device)
         loss = ((score - pred) ** 2 / score_norm).mean()
-        print(score.shape)
         loss.backward()
         optimizer.step()
         loss_tot += loss.item()
